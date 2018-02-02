@@ -124,7 +124,7 @@ def create_plr_file(dfraw):
     assert ntimepoints == 150
     pprofile.columns = dfraw.ix[0,'Time Profile'].split('\t')
     df = pd.concat([df,pprofile], axis=1)
-    df['Time'] = df['Time'].astype(str).str.split(' ').str[1] 
+    df[['Date','Time']] = df['Time'].astype(str).str.split(' ',expand=True) 
     return df
     
 def create_task_file(dfraw):
@@ -136,7 +136,7 @@ def create_task_file(dfraw):
     assert (ntimepoints == 450) | (ntimepoints == 750)
     pprofile.columns = dfraw.ix[0,'Time Profile'].split('\t')
     df = pd.concat([df,pprofile], axis=1)
-    df['Time'] = df['Time'].astype(str).str.split(' ').str[1]
+    df[['Date','Time']] = df['Time'].astype(str).str.split(' ', expand=True)
     return df
 
 
