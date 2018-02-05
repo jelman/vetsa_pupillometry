@@ -32,12 +32,14 @@ def rotate(strg,n):
 
 
 def get_pupil_files(indir, pttrn='*_Pupil_*Parsed_*.csv'):
+    """Search for pupil files based on filename in given directory"""
     globstr = os.path.join(indir, pttrn)
     filelist = glob(globstr)
     return filelist
 
 
 def merge_parsed_files(infiles):
+    """Loop through pupil files, load, and append to dataframe"""
     pupildf_list = []
     for infile in infiles:
         # Load parsed pupil data
@@ -50,6 +52,7 @@ def merge_parsed_files(infiles):
 
 
 def get_pupil_times(pupildf):
+    """Get timestamp and data columns from pupillometer file"""
     pupilcols = ['Subject ID', 'Date', 'Time', 'Measurement Duration']
     pupiltime = pupildf[pupilcols]
     pupiltime.rename(columns={"Subject ID":"vetsaid"}, inplace=True)
@@ -58,6 +61,8 @@ def get_pupil_times(pupildf):
 
 
 def get_behav_times(behavdf):
+    """Get timestamp and date info from behavioral file. Converts from wide to long 
+    with a column indicating the trial each timestamp is associated with."""
     # Select columns with timestamp info
     timecols = [col for col in behavdf.columns if "TIM" in col]
     behavdf = behavdf[["SUBJECTID","TESTDATE"]+timecols]
@@ -79,18 +84,28 @@ def get_behav_times(behavdf):
 
 
 def main(indir, behav, outdir):
+    # Get pupillometer timestamp data
     pupilfiles = get_pupil_files(indir)
     pupildf = merge_parsed_files(pupilfiles)
     pupiltime = get_pupil_times(pupildf)
+    # Get database timestamp data
     behavdf = pd.read_csv(behav)
     behavtime = get_behav_times(behavdf)
+    # Full merge on Subject, Date, and Time. 
     fulldf = pd.merge(pupiltime, behavtime, on=['vetsaid','Date','Time'], how='outer', indicator=True)
     fulldf.rename(columns={"_merge":"MatchResult"}, inplace=True)
+    # Indicate whether timestamp is matched, and if not, which source it came from
     fulldf['MatchResult'] = fulldf['MatchResult'].str.replace('left_only','db_missing')
     fulldf['MatchResult'] = fulldf['MatchResult'].str.replace('right_only','pupil_missing')
     fulldf['MatchResult'] = fulldf['MatchResult'].str.replace('both','complete')
     fulldf.sort_values(['vetsaid','Time'], inplace=True)
+    # Indicate whether subject is present in both data sources. May not have been entered or backed up yet.
+    completesubs = np.intersect1d(pupiltime.vetsaid.unique(), behavtime.vetsaid.unique())
+    fulldf["SubjectEntry"] = "Partial"
+    fulldf.loc[fulldf.vetsaid.isin(completesubs),"SubjectEntry"] = "Complete"
+    # Save out file of unmatched timestamps
     missingdf = fulldf[fulldf.MatchResult!="complete"]
+    missingdf = missingdf[missingdf.SubjectEntry=="Complete"]
     timestamp = datetime.now().strftime("%Y%m%d")
     fname = "UnmatchedTimestamps_" + timestamp + ".csv"
     outfile = os.path.join(outdir, fname)
@@ -110,7 +125,6 @@ if __name__ == '__main__':
     # Select parsed pupil data files
     indir = tkFileDialog.askdirectory(parent=root,initialdir=os.getcwd(),
                                       title='Please select input directory containing parsed pupil data')
-    infiles = list(infiles)
     # Select file with behavioral info
     behav = tkFileDialog.askopenfilename(parent=root,
                                          title='Choose behavioral performance file')    
@@ -118,5 +132,5 @@ if __name__ == '__main__':
     outdir = tkFileDialog.askdirectory(parent=root,initialdir=os.getcwd(), 
                                        title='Please select output directory')
     # Run script
-    main(outdir, behav, infiles)
+    main(indir, behav, outdir)
     
