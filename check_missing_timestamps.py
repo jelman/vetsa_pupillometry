@@ -57,7 +57,25 @@ def get_pupil_times(pupildf):
     pupiltime = pupildf[pupilcols]
     pupiltime.rename(columns={"Subject ID":"vetsaid"}, inplace=True)
     pupiltime.loc[:,'Date'] = pd.to_datetime(pupiltime['Date'])
-    return pupiltime
+    return pupiltime.sort_values(by=['vetsaid', 'Date', 'Time'])
+
+
+def get_practice_mask(x):
+    """If 5 sec duration, masks out first trial, else no masking."""
+    if x.iloc[0] == '5.000sec':
+        result = np.ones_like(x)
+        result[0] = 0
+    else:
+        result = np.ones_like(x)
+    return result
+    
+ 
+def drop_plr_practice(pupiltime):
+    """Mask out the PLR practice trial by dropping the first trial of 
+    5 sec duration"""
+    pupilgrp = pupiltime.groupby(['vetsaid','Date','Measurement Duration'])['Measurement Duration']
+    mask = pupilgrp.transform(get_practice_mask).astype(bool)
+    return pupiltime[mask]
 
 
 def get_behav_times(behavdf):
@@ -88,11 +106,13 @@ def main(indir, behav, outdir):
     pupilfiles = get_pupil_files(indir)
     pupildf = merge_parsed_files(pupilfiles)
     pupiltime = get_pupil_times(pupildf)
+    # Drop PLR practice trials
+    pupiltime_filt = drop_plr_practice(pupiltime)
     # Get database timestamp data
     behavdf = pd.read_csv(behav)
     behavtime = get_behav_times(behavdf)
     # Full merge on Subject, Date, and Time. 
-    fulldf = pd.merge(pupiltime, behavtime, on=['vetsaid','Date','Time'], how='outer', indicator=True)
+    fulldf = pd.merge(pupiltime_filt, behavtime, on=['vetsaid','Date','Time'], how='outer', indicator=True)
     fulldf.rename(columns={"_merge":"MatchResult"}, inplace=True)
     # Indicate whether timestamp is matched, and if not, which source it came from
     fulldf['MatchResult'] = fulldf['MatchResult'].str.replace('left_only','db_missing')
