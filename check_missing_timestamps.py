@@ -88,7 +88,7 @@ def get_behav_times(behavdf):
     # Rotate variable names to make it easier to go from wide format to long
     behavdf.columns = [rotate(col, -3) if col in timecols else col for col in behavdf.columns]
     # Convert from wide to long format
-    behavdflong = pd.wide_to_long(behavdf, stubnames="TIM", i="vetsaid", j="Trial", suffix="[a-zA-Z0-9_]").reset_index()
+    behavdflong = pd.wide_to_long(behavdf, stubnames="TIM", i="vetsaid", j="Trial", suffix="\w+").reset_index()
     behavdflong['TIM'].replace(999999,np.nan, inplace=True)
     behavdflong = behavdflong.dropna(axis=0)    
     # Get rid of decimal and convert to string
@@ -96,7 +96,7 @@ def get_behav_times(behavdf):
     # Convert to timestamp
     behavdflong['Time'] = behavdflong['TIM'].str[:2] + ":" + behavdflong['TIM'].str[2:4] + ":" + behavdflong['TIM'].str[4:]
     behavdflong["Date"] = behavdflong["Date"].str.split(":").str[0]
-    behavdflong["Date"] = pd.to_datetime(behavdflong.Date, format='%d%b%Y')
+    behavdflong["Date"] = pd.to_datetime(behavdflong.Date, infer_datetime_format=True)
     behavtime = behavdflong.drop(columns='TIM')
     return behavtime
 

@@ -22,40 +22,31 @@ def read_file(filename):
 
 def clean_text(lines):
     # Strip newlines characters
-    lines = [line.replace('\r\n', '') for line in lines]
-    lines = [line.replace('\n', '') for line in lines]
+    newlines = [line.replace('\r\n', '') for line in lines]
+    newlines = [line.replace('\n', '') for line in newlines]
     # Delete redundant 75% recovery time value reported on same line as latency
-    lines = [re.sub(', 75%.*', '', line) for line in lines]
-    if lines[0] == '':
-        lines.pop(0)
-    return lines
+    newlines = [re.sub(', 75%.*', '', line) for line in newlines]
+    if newlines[0] == '':
+        newlines.pop(0)
+    return newlines
+
+def multi_delete(list_, indexes):
+    indexes = sorted(list(indexes), reverse=True)
+    for index in indexes:
+        del list_[index]
+    return list_
 
 def join_multilines(lines):
-    # Add blank space to end so that loop will include last element in list
-    lines.append('')
-    # Create iterator
-    iterlines = iter(lines)
-    # Initialize results container
-    results = []
-    # Initialize previous line variable
-    prev = next(iterlines)
-    # Begin looping. Join multi-line elements and place breakpoints between trials
-    for line in iterlines:
-        if re.search("= $", prev):
-            results.append(prev+line)
-            prev = next(iterlines)
-        elif (prev=='' and line==''):
-            results.append('BREAK')
-            prev = next(iterlines)
-            continue
-        else:
-            results.append(prev)
-            prev = line
-    return results
-
+    break_idx = [ i for i, item in enumerate(lines) if item.endswith("= ") ]
+    for i in break_idx:
+        lines[i] = ''.join(lines[i:i+2])
+    del_idx = [x+1 for x in break_idx]
+    lines = multi_delete(lines, del_idx)
+    return lines
+    
 def split_trial_lists(lines):
     # Break list into sublists of trials
-    sublists = [list(x[1]) for x in itertools.groupby(lines, lambda x: x=='BREAK') if not x[0]]
+    sublists = [list(x[1]) for x in itertools.groupby(lines, lambda x: x=='') if not x[0]]
     return sublists
 
 def get_task_lists(trial_lists):
@@ -93,8 +84,11 @@ def create_task_df(sublistsTask):
     for tasklist in sublistsTask:
         dictTask = {}
         for item in tasklist:
-            key, val = item.split(' = ')
-            dictTask[key.strip()] = val.strip()
+            if item == '':
+                continue
+            else:
+                key, val = item.split(' = ')
+                dictTask[key.strip()] = val.strip()
         dictTasklist.append(dictTask)
     task_df = pd.DataFrame(dictTasklist)
     return task_df
@@ -120,9 +114,9 @@ def create_plr_file(dfraw):
       'dilation velocity', 'Lat', '75% recovery time', 'Pupil Profile']
     df = dfraw[plrCols]
     pprofile = df.pop('Pupil Profile').str.split('\t', expand=True)
-    ntimepoints = len(dfraw.ix[0,'Time Profile'].split('\t'))
+    ntimepoints = len(dfraw.loc[dfraw.index[0],'Time Profile'].split('\t'))
     assert ntimepoints == 150
-    pprofile.columns = dfraw.ix[0,'Time Profile'].split('\t')
+    pprofile.columns = dfraw.loc[dfraw.index[0],'Time Profile'].split('\t')
     df = pd.concat([df,pprofile], axis=1)
     df[['Date','Time']] = df['Time'].astype(str).str.split(' ',expand=True) 
     return df
@@ -132,9 +126,9 @@ def create_task_file(dfraw):
             'Eye Measured','Pulse Intensity','DC Intensity','Pulse Start Time',
             'Pulse Duration','Measurement Duration','Pupil Profile']]
     pprofile = df.pop('Pupil Profile').str.split('\t', expand=True)
-    ntimepoints = len(dfraw.ix[0,'Time Profile'].split('\t'))
+    ntimepoints = len(dfraw.loc[dfraw.index[0],'Time Profile'].split('\t'))
     assert (ntimepoints == 450) | (ntimepoints == 750)
-    pprofile.columns = dfraw.ix[0,'Time Profile'].split('\t')
+    pprofile.columns = dfraw.loc[dfraw.index[0],'Time Profile'].split('\t')
     df = pd.concat([df,pprofile], axis=1)
     df[['Date','Time']] = df['Time'].astype(str).str.split(' ', expand=True)
     return df
@@ -165,10 +159,10 @@ def parse_CFREC(sublistsCFREC):
 
 def parse_pupil_data(filelist, outdir):
     for filename in filelist:
-        lines = read_file(filename)
-        clean_lines = clean_text(lines)
-        clean_lines = join_multilines(clean_lines)
-        trial_lists = split_trial_lists(clean_lines)
+        rawlines = read_file(filename)
+        clean_lines = clean_text(rawlines)
+        joined_lines = join_multilines(clean_lines)
+        trial_lists = split_trial_lists(joined_lines)
         sublistsPLR, sublistsDS, sublistsCFREC = get_task_lists(trial_lists)
         timestamp = datetime.now().strftime("%Y%m%d")
         # Pupil Light Reflex
