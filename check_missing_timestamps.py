@@ -42,12 +42,13 @@ def merge_parsed_files(infiles):
     """Loop through pupil files, load, and append to dataframe"""
     pupildf_list = []
     for infile in infiles:
+        print("Loading {}".format(infile))
         # Load parsed pupil data
         subjdf = pd.read_csv(infile, sep=",")
         # Append to list
         pupildf_list.append(subjdf)
     # Merge individual files
-    pupildf = pd.concat(pupildf_list)
+    pupildf = pd.concat(pupildf_list, sort=False)
     return pupildf
 
 
