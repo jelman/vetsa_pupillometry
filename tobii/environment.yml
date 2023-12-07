@@ -11,4 +11,4 @@ dependencies:
   - seaborn=0.12.*
   - scipy=1.7.3
   - nilearn=0.10.*
-  - nitime=10.10.*
+  - nitime=0.10.*
