@@ -12,10 +12,11 @@ from nilearn.glm import ARModel, OLSModel
 
 
 def get_fname_subid(fname):
-    """Given the input files, extract subject ID from basename"""
+    """Given the input files, extract subject ID from basename. IDs are
+    assumed to be 5 digits followed by a dash followed by a single digit."""
     fname_base = os.path.basename(fname)  
     try:
-        subid = re.search(r'(\d+)-\d.[xlsx|gazedata]', fname_base, re.IGNORECASE).group(1)
+        subid = re.search(r'(\d{5}-\d)', fname_base, re.IGNORECASE).group(1)
         return subid
     except AttributeError:
         print("Could not find valid subject ID in path of input file.")
