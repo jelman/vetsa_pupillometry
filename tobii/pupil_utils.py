@@ -10,13 +10,39 @@ from scipy.signal import butter, filtfilt
 from scipy.signal import fftconvolve
 from nilearn.glm import ARModel, OLSModel
 
+def get_vetsaid(df, fname):
+    """
+    Extract VETSAID from data. VETSAID is 5 digits followed either an A or B.
+    IDs were coded as 5 digits followed by a dash followed by a single digit, 
+    with 1 indicating an A and 2 indicating a B. This function will return the
+    VETSAID as a string. VETSAID contained in the data will be checked against
+    the VETSAID in the filename. If they do not match, an exception will be
+    raised.
+    """
+    fname_base = os.path.basename(fname)  
+    try:
+        vetsaid = re.search(r'(\d{5}-\d)', fname_base, re.IGNORECASE).group(1)
+        if vetsaid[-1] == '1':
+            vetsaid = vetsaid[:-2] + 'A'
+        elif vetsaid[-1] == '2':
+            vetsaid = vetsaid[:-2] + 'B'
+        else:
+            raise Exception("VETSAID in filename does not end in 1 or 2.")
+    except AttributeError:
+        print("Could not find valid VETSAID in path of input file.")
+    df['VETSAID'] = df['Subject'].astype(str) + df['Session'].map({1: 'A', 2: 'B'})
+    if vetsaid == df.VETSAID.unique()[0]:
+        return vetsaid
+    else:
+        raise Exception('VETSAID in file {0} does not match filename: {1}'.format(df.VETSAID.unique()[0], fname))
+
 
 def get_fname_subid(fname):
     """Given the input files, extract subject ID from basename. IDs are
-    assumed to be 5 digits followed by a dash followed by a single digit."""
+    assumed to be 5 digits followed by a dash and another digit."""
     fname_base = os.path.basename(fname)  
     try:
-        subid = re.search(r'(\d{5}-\d)', fname_base, re.IGNORECASE).group(1)
+        subid = re.search(r'(\d+)-\d.[xlsx|gazedata]', fname_base, re.IGNORECASE).group(1)
         return subid
     except AttributeError:
         print("Could not find valid subject ID in path of input file.")
