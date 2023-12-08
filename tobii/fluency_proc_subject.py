@@ -37,7 +37,7 @@ except ImportError:
     from tkinter import filedialog
 
 
-def plot_trials(pupildf, fname):
+def plot_trials(pupildf, pupil_fname):
     sns.set_style("ticks")
     palette = sns.color_palette("deep", n_colors=len(pupildf.Trial.unique()))
     p = sns.lineplot(data=pupildf, x="Timestamp",y="Dilation", hue="Trial", palette=palette, legend="brief")
@@ -45,7 +45,7 @@ def plot_trials(pupildf, fname):
     plt.ylim(-1.0, 1.0)
     plt.tight_layout()
     plt.legend(loc='best')
-    plot_outname = pupil_utils.get_proc_outfile(fname, "_PupilPlot.png")
+    plot_outname = pupil_fname.replace("_ProcessedPupil.csv", "_PupilPlot.png")
     p.figure.savefig(plot_outname)
     plt.close()
     
@@ -106,7 +106,7 @@ def get_trial_events(df):
     return trialevents
 
    
-def proc_subject(filelist):
+def proc_subject(filelist, outdir):
     """Given an infile of raw pupil data, saves out:
         1. Session level data with dilation data summarized for each trial
         2. Dataframe of average peristumulus timecourse for each condition
@@ -114,13 +114,13 @@ def proc_subject(filelist):
         4. Percent of samples with blinks """
     for fname in filelist:
         print('Processing {}'.format(fname))
-        if (os.path.splitext(fname)[-1] == ".gazedata") | (os.path.splitext(fname)[-1] == ".csv"):
+        if (fname.lower().endswith(".gazedata")) | (fname.lower().endswith(".csv") | (fname.lower().endswith(".txt")):
             df = pd.read_csv(fname, sep="\t")
-        elif os.path.splitext(fname)[-1] == ".xlsx":
-            df = pd.read_excel(fname, parse_dates=False)
+        elif (fname.lower().endswith(".xlsx")):
+            df = pd.read_excel(fname)
         else: 
-            raise IOError('Could not open {}'.format(fname))
-        subid = pupil_utils.get_subid(df['Subject'], fname)
+            raise IOError('Could not open {}'.format(fname))  
+        subid = pupil_utils.get_vetsaid(df, fname)
         timepoint = pupil_utils.get_timepoint(df['Session'], fname)
         trialevents = get_trial_events(df)
         dfresamp = clean_trials(df, trialevents)
@@ -136,12 +136,12 @@ def proc_subject(filelist):
                                          'BlinksLR':'BlinkPct'})
         # Set subject ID and session as (as type string)
         pupildf['Subject'] = subid
-        pupildf['Session'] = timepoint
         pupildf['Timestamp'] = pd.to_datetime(pupildf.Timestamp).dt.strftime('%H:%M:%S')
-        pupil_outname = pupil_utils.get_proc_outfile(fname, '_ProcessedPupil.csv')
+        # Generate output filename
+        pupil_outname = os.path.join(outdir, 'Fluency_' + subid + '_ProcessedPupil.csv')
         print('Writing processed data to {0}'.format(pupil_outname))
         pupildf.to_csv(pupil_outname, index=False)
-        plot_trials(pupildf, fname)
+        plot_trials(pupildf, pupil_outname)
         
         #### Create data for 15 second blocks
         dfresamp15s = dfresamp.groupby(level=['Condition','Trial']).apply(lambda x: x.resample('15s', on='Timestamp', closed='right', label='right').mean(numeric_only=True))
@@ -152,9 +152,8 @@ def proc_subject(filelist):
                                          'BlinksLR':'BlinkPct'})
         # Set subject ID as (as type string)
         pupildf15s['Subject'] = subid
-        pupildf15s['Session'] = timepoint
         pupildf15s['Timestamp'] = pd.to_datetime(pupildf15s.Timestamp).dt.strftime('%H:%M:%S')
-        pupil15s_outname = pupil_utils.get_proc_outfile(fname, '_ProcessedPupil_Quartiles.csv')
+        pupil15s_outname = pupil_outname('_ProcessedPupil.csv', '_ProcessedPupil_Quartiles.csv')
         'Writing quartile data to {0}'.format(pupil15s_outname)
         pupildf15s.to_csv(pupil15s_outname, index=False)
 
@@ -164,7 +163,7 @@ def proc_subject(filelist):
 if __name__ == '__main__':
     if len(sys.argv) == 1:
         print('')
-        print('USAGE: {} <raw pupil file> '.format(os.path.basename(sys.argv[0])))
+        print('USAGE: {} <raw pupil file> <output dir>'.format(os.path.basename(sys.argv[0])))
         print("""Processes single subject data from fluency task and outputs csv
               files for use in further group analysis. Takes eye tracker data 
               text file (*.gazedata) as input. Removes artifacts, filters, and 
@@ -176,10 +175,14 @@ if __name__ == '__main__':
         filelist = filedialog.askopenfilenames(parent=root,
                                               title='Choose Fluency pupil gazedata file to process')       
         filelist = list(filelist)
+        # Select folder to save processed data
+        outdir = filedialog.askdirectory(parent=root,
+                                         title='Choose folder to save processed data')
         # Run script
-        proc_subject(filelist)
+        proc_subject(filelist, outdir)
 
     else:
         filelist = [os.path.abspath(f) for f in sys.argv[1:]]
-        proc_subject(filelist)
+        outdir = sys.argv[2]
+        proc_subject(filelist, outdir)
 
