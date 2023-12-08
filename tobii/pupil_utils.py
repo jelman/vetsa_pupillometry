@@ -21,7 +21,7 @@ def get_vetsaid(df, fname):
     """
     fname_base = os.path.basename(fname)  
     try:
-        vetsaid = re.search(r'(\d{5}-\d)', fname_base, re.IGNORECASE).group(1)
+        vetsaid = re.search(r'(\d{5}-[12])', fname_base, re.IGNORECASE).group(1)
         if vetsaid[-1] == '1':
             vetsaid = vetsaid[:-2] + 'A'
         elif vetsaid[-1] == '2':
@@ -29,12 +29,12 @@ def get_vetsaid(df, fname):
         else:
             raise Exception("VETSAID in filename does not end in 1 or 2.")
     except AttributeError:
-        print("Could not find valid VETSAID in path of input file.")
+        raise Exception("Could not find valid VETSAID in path of input file.")
     df['VETSAID'] = df['Subject'].astype(str) + df['Session'].map({1: 'A', 2: 'B'})
-    if vetsaid == df.VETSAID.unique()[0]:
+    if vetsaid == df['VETSAID'].unique()[0]:
         return vetsaid
     else:
-        raise Exception('VETSAID in file {0} does not match filename: {1}'.format(df.VETSAID.unique()[0], fname))
+        raise Exception('VETSAID in file {0} does not match filename: {1}'.format(df['VETSAID'].unique()[0], fname))
 
 
 def get_fname_subid(fname):
@@ -147,12 +147,12 @@ def get_blinks(diameter, validity, pupilthresh_hi=5., pupilthresh_lo=1., gradien
 def deblink(dfraw, **kwargs):
     """ Set dilation of all blink trials to nan."""
     df = dfraw.copy()
-    df.loc[df.DiameterPupilLeftEye<0, 'DiameterPupilLeftEye'] = np.nan
-    df.loc[df.DiameterPupilRightEye<0, 'DiameterPupilRightEye'] = np.nan
-    df['BlinksLeft'] = get_blinks(df.DiameterPupilLeftEye, df.ValidityLeftEye, **kwargs)
-    df['BlinksRight'] = get_blinks(df.DiameterPupilRightEye, df.ValidityRightEye, **kwargs)
-    df.loc[df.BlinksLeft==1, "DiameterPupilLeftEye"] = np.nan
-    df.loc[df.BlinksRight==1, "DiameterPupilRightEye"] = np.nan    
+    df.loc[df.PupilDiameterLeftEye<0, 'PupilDiameterLeftEye'] = np.nan
+    df.loc[df.PupilDiameterRightEye<0, 'PupilDiameterRightEye'] = np.nan
+    df['BlinksLeft'] = get_blinks(df.PupilDiameterLeftEye, df.PupilValidityLeftEye, **kwargs)
+    df['BlinksRight'] = get_blinks(df.PupilDiameterRightEye, df.PupilValidityRightEye, **kwargs)
+    df.loc[df.BlinksLeft==1, "PupilDiameterLeftEye"] = np.nan
+    df.loc[df.BlinksRight==1, "PupilDiameterRightEye"] = np.nan    
     df['BlinksLR'] = np.where(df.BlinksLeft+df.BlinksRight>=2, 1, 0)
     return df
 
@@ -230,12 +230,12 @@ def resamp_filt_data(df, bin_length='33ms', filt_type='band', string_cols=None):
         8. If string columns should be retained, forward fill and merge with resamp data
         """
     # Smooth the pupil diameter data
-    df['DiameterPupilLeftEyeSmooth'] = df.DiameterPupilLeftEye.rolling(5, center=True).mean()  
-    df['DiameterPupilRightEyeSmooth'] = df.DiameterPupilRightEye.rolling(5, center=True).mean()  
-    df['DiameterPupilLRSmooth'] = df[['DiameterPupilLeftEyeSmooth','DiameterPupilRightEyeSmooth']].mean(axis=1, skipna=True)
+    df['PupilDiameterLeftEyeSmooth'] = df.PupilDiameterLeftEye.rolling(5, center=True).mean()  
+    df['PupilDiameterRightEyeSmooth'] = df.PupilDiameterRightEye.rolling(5, center=True).mean()  
+    df['PupilDiameterLRSmooth'] = df[['PupilDiameterLeftEyeSmooth','PupilDiameterRightEyeSmooth']].mean(axis=1, skipna=True)
 
     # Convert the time to seconds since the start of the experiment
-    df['Time'] = (df.TETTime - df.TETTime.iloc[0]) / 1000.
+    df['Time'] = (df.RTTime - df.RTTime.iloc[0]) / 1000.
 
     # Convert the time to a datetime object and set it as the index
     df['Timestamp'] = pd.to_datetime(df.Time, unit='s')
@@ -244,26 +244,25 @@ def resamp_filt_data(df, bin_length='33ms', filt_type='band', string_cols=None):
     dfresamp = df.select_dtypes(exclude=['object']).resample(bin_length, closed='right', label='right').mean()
     # Fill in missing values by interpolating from nearest value
     dfresamp['Subject'] = df.Subject[0]
-    nearestcols = ['Subject','Session','TrialId','CRESP','ACC','RT',
+    nearestcols = ['Subject','Session','CRESP','ACC','RT',
                    'BlinksLeft','BlinksRight','BlinksLR'] 
     dfresamp[nearestcols] = dfresamp[nearestcols].interpolate('nearest')
     # Round the blinks to nearest whole number
     dfresamp[['BlinksLeft','BlinksRight','BlinksLR']] = dfresamp[['BlinksLeft','BlinksRight','BlinksLR']].round()
     # Interpolate the pupil diameter to fill in missing values
-    resampcols = ['DiameterPupilLRSmooth','DiameterPupilLeftEyeSmooth','DiameterPupilRightEyeSmooth']
+    resampcols = ['PupilDiameterLRSmooth','PupilDiameterLeftEyeSmooth','PupilDiameterRightEyeSmooth']
     newresampcols = [x.replace('Smooth','Resamp') for x in resampcols]
     dfresamp[newresampcols] = dfresamp[resampcols].interpolate('linear', limit_direction='both')    
     # Filter the pupil data
     if filt_type=='band':
-        dfresamp['DiameterPupilLRFilt'] = butter_bandpass_filter(dfresamp.DiameterPupilLRResamp)        
-        dfresamp['DiameterPupilLeftEyeFilt'] = butter_bandpass_filter(dfresamp.DiameterPupilLeftEyeResamp)
-        dfresamp['DiameterPupilRightEyeFilt'] = butter_bandpass_filter(dfresamp.DiameterPupilRightEyeResamp)    
+        dfresamp['PupilDiameterLRFilt'] = butter_bandpass_filter(dfresamp.PupilDiameterLRResamp)        
+        dfresamp['PupilDiameterLeftEyeFilt'] = butter_bandpass_filter(dfresamp.PupilDiameterLeftEyeResamp)
+        dfresamp['PupilDiameterRightEyeFilt'] = butter_bandpass_filter(dfresamp.PupilDiameterRightEyeResamp)    
     elif filt_type=='low':
-        dfresamp['DiameterPupilLRFilt'] = butter_lowpass_filter(dfresamp.DiameterPupilLRResamp)        
-        dfresamp['DiameterPupilLeftEyeFilt'] = butter_lowpass_filter(dfresamp.DiameterPupilLeftEyeResamp)
-        dfresamp['DiameterPupilRightEyeFilt'] = butter_lowpass_filter(dfresamp.DiameterPupilRightEyeResamp)           
+        dfresamp['PupilDiameterLRFilt'] = butter_lowpass_filter(dfresamp.PupilDiameterLRResamp)        
+        dfresamp['PupilDiameterLeftEyeFilt'] = butter_lowpass_filter(dfresamp.PupilDiameterLeftEyeResamp)
+        dfresamp['PupilDiameterRightEyeFilt'] = butter_lowpass_filter(dfresamp.PupilDiameterRightEyeResamp)           
     dfresamp['Session'] = dfresamp['Session'].astype('int')    
-    dfresamp['TrialId'] = dfresamp['TrialId'].astype('int')
     if string_cols:
         stringdf = df[string_cols].resample(bin_length).ffill()
         dfresamp = dfresamp.merge(stringdf, left_index=True, right_index=True)
@@ -313,8 +312,8 @@ def d_pupil_irf(x, s1=50000., n1=10.1, tmax=0.930):
 def plot_qc(dfresamp, infile):
     """Plot raw signal, interpolated and filter signal, and blinks"""
     outfile = get_outfile(infile, '_PupilLR_plot.png')
-    signal = dfresamp.DiameterPupilLRResamp.values
-    signal_bp = dfresamp.DiameterPupilLRFilt.values
+    signal = dfresamp.PupilDiameterLRResamp.values
+    signal_bp = dfresamp.PupilDiameterLRFilt.values
     blinktimes = dfresamp.BlinksLR.values
     plt.plot(range(len(signal)), signal, sns.xkcd_rgb["pale red"], 
          range(len(signal_bp)), signal_bp+np.nanmean(signal), sns.xkcd_rgb["denim blue"], 
