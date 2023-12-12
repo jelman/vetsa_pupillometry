@@ -35,10 +35,8 @@ except ImportError:
     from tkinter import filedialog
 
 def plot_trials(pupildf, pupil_fname):
-    pupildf['Time'] = pd.to_datetime(pupildf.Timestamp).dt.second
     palette = sns.cubehelix_palette(len(pupildf.Load.unique()))
-    p = sns.lineplot(data=pupildf, x="Time",y="Dilation", hue="Load", palette=palette, legend="brief", ci=None)
-    plt.xticks(rotation=45)
+    p = sns.lineplot(data=pupildf, x="Seconds",y="Dilation", hue="Load", palette=palette, legend="brief", errorbar=None)
     plt.ylim(-.2, .5)
     plt.tight_layout()
     plot_outname = pupil_fname.replace("_ProcessedPupil.csv", "_PupilPlot.png")
@@ -127,7 +125,7 @@ def proc_subject(filelist, outdir):
         df['Trial'] = recode_digitlist(df['DigitList'])
         # Convert PupilDiameterLeftEye and PupilDiameterRightEye to numeric
         df['PupilDiameterLeftEye'] = pd.to_numeric(df['PupilDiameterLeftEye'], errors='coerce')
-        df['PupilDiameterRightEye'] = pd.to_numeric(df['PupilDiameterRightEye'], errors='coerce')        # Create Load and TrialId columns
+        df['PupilDiameterRightEye'] = pd.to_numeric(df['PupilDiameterRightEye'], errors='coerce')      
         # Create Load and TrialId columns
         df['Load'] = df['Trial'].str[:-1]
         df['TrialId'] = df['Trial'].str[-1]
@@ -149,13 +147,15 @@ def proc_subject(filelist, outdir):
         dfresamp1s.loc[dfresamp1s.BlinkPct>.5, ['Dilation','Baseline','Diameter','BlinkPct']] = np.nan
         # Drop missing samples and average of trials within load
         pupildf = dfresamp1s.groupby(['Load','Timestamp']).mean(numeric_only=True)
-        # Set subject ID and session as (as type string)
-        pupildf['Subject'] = subid
         # Add number of non-missing trials that contributed to each sample average
         pupildf['ntrials'] = dfresamp1s.dropna(subset=['Dilation']).groupby(['Load','Timestamp']).size()
+        # Set subject ID and session as (as type string)
+        pupildf['Subject'] = subid
+        # Add column with seconds and format Timestamp
         pupildf = pupildf.reset_index()
-        pupildf['Timestamp'] = pupildf.Timestamp.dt.strftime('%H:%M:%S')
-        pupildf = pupildf[['Subject','Load','Timestamp','Baseline','Diameter','Dilation','BlinkPct','ntrials']]
+        pupildf['Timestamp'] = pupil_utils.convert_timestamp(pupildf.Timestamp)
+        pupildf['Seconds'] = pupildf['Timestamp'].apply(pupil_utils.format_timedelta_seconds)
+        pupildf['Timestamp'] = pupildf['Timestamp'].apply(pupil_utils.format_timedelta_hms)
         # Generate output filename
         pupil_outname = os.path.join(outdir, 'DigitSpan_' + subid + '_ProcessedPupil.csv')
         print('Writing processed data to {0}'.format(pupil_outname))

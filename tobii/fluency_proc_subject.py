@@ -40,13 +40,16 @@ except ImportError:
 def plot_trials(pupildf, pupil_fname):
     sns.set_style("ticks")
     # Define a custom color palette
-    task_colors = {'Letter': ['lightcoral', 'red'], 'Category': ['dodgerblue', 'blue']}
-    palette = [color for task in pupildf.Task.unique() for color in task_colors[task]]
+    condition_colors = {'C': 'blue', 'L': 'dodgerblue', 'GirlsNames': 'red',  'Vegetables': 'lightcoral'}
+    palette = [condition_colors[condition] for condition in pupildf.Condition.unique()]
     p = sns.lineplot(data=pupildf, x="Seconds", y="Dilation", hue="Condition", palette=palette, legend="brief")
     plt.ylim(-1.0, 1.0)
     plt.tight_layout()
-    plt.legend(loc='best')
-    
+    # Set the ordering of the legend
+    handles, labels = p.get_legend_handles_labels()
+    ordered_labels = ['C', 'L', 'GirlsNames', 'Vegetables']
+    ordered_handles = [handles[labels.index(label)] for label in ordered_labels]
+    p.legend(ordered_handles, ordered_labels, loc='best')
     # Add shading for baseline period
     p.axvspan(-6, -4, alpha=0.2, color='lightgreen', zorder=0)
     # Add shading for instruction period
@@ -63,8 +66,8 @@ def clean_trials(df):
     if len(conditions) != 4:
         raise Exception('Expected 4 trials, subject has {} trials'.format(len(conditions)))
     # If there are 4 trials, check that they are ['C','L','Vegetables','GirlsNames']
-    elif set(conditions) != set(['C','L','Vegetables','GirlsNames']):
-        raise Exception('Expected trials to be ["C","L","Vegetables","GirlsNames"], subject has {}'.format(conditions))
+    elif set(conditions) != set(['C','L','GirlsNames','Vegetables']):
+        raise Exception('Expected trials to be ["C","L","GirlsNames","Vegetables"], subject has {}'.format(conditions))
     # Clean each trial
     for condition in conditions:
         rawtrial = df.loc[df.Condition==condition]
