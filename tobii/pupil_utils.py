@@ -269,6 +269,27 @@ def resamp_filt_data(df, bin_length='33ms', filt_type='band', string_cols=None):
     return dfresamp
 
 
+# Convert 'Timestamp' to timedelta relative to the Unix epoch
+def convert_timestamp(ts):
+    """Converts timestamp to timedelta relative to the Unix epoch"""
+    return ts - pd.Timestamp('1970-01-01')
+
+
+def format_timedelta_seconds(td):
+    """Converts timedelta to total seconds, keeping the sign."""
+    total_seconds = td.total_seconds()
+    return float(total_seconds)
+
+
+def format_timedelta_hms(td):
+    """Converts timedelta to HH:MM:SS, keeping the sign."""
+    total_seconds = td.total_seconds()
+    sign = '-' if total_seconds < 0 else ''
+    hours, remainder = divmod(abs(total_seconds), 3600)
+    minutes, seconds = divmod(remainder, 60)
+    return '{}{:02}:{:02}:{:02}'.format(sign, int(hours), int(minutes), int(seconds))
+
+
 def pupil_irf(x, s1=50000., n1=10.1, tmax=0.930):
     return s1 * ((x**n1) * (np.e**((-n1*x)/tmax)))
 
