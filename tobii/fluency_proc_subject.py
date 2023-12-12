@@ -39,71 +39,52 @@ except ImportError:
 
 def plot_trials(pupildf, pupil_fname):
     sns.set_style("ticks")
-    palette = sns.color_palette("deep", n_colors=len(pupildf.Trial.unique()))
-    p = sns.lineplot(data=pupildf, x="Timestamp",y="Dilation", hue="Trial", palette=palette, legend="brief")
-    plt.xticks(rotation=45)
+    # Define a custom color palette
+    task_colors = {'Letter': ['lightcoral', 'red'], 'Category': ['dodgerblue', 'blue']}
+    palette = [color for task in pupildf.Task.unique() for color in task_colors[task]]
+    p = sns.lineplot(data=pupildf, x="Seconds", y="Dilation", hue="Condition", palette=palette, legend="brief")
     plt.ylim(-1.0, 1.0)
     plt.tight_layout()
     plt.legend(loc='best')
+    
+    # Add shading for baseline period
+    p.axvspan(-6, -4, alpha=0.2, color='lightgreen', zorder=0)
+    # Add shading for instruction period
+    p.axvspan(-4, 0, alpha=0.4, color='lightgray', zorder=0)
     plot_outname = pupil_fname.replace("_ProcessedPupil.csv", "_PupilPlot.png")
     p.figure.savefig(plot_outname)
     plt.close()
     
     
-def clean_trials(df, trialevents):
+def clean_trials(df):
     resampled_dict = {}
-    for trialnum in trialevents.Trial.unique():
-        basestart, basestop, respstart, respstop =  trialevents.loc[trialevents.Trial==trialnum,'TETTime']
-        condition = trialevents.loc[trialevents.Trial==trialnum,'Condition'].iat[0]
-        rawtrial = df.loc[(df.TETTime>=basestart) & (df.TETTime<=respstop)]
-        rawtrial.loc[(rawtrial.TETTime>=basestart) & (rawtrial.TETTime<=basestop),'Phase'] = 'Baseline' 
-        rawtrial.loc[(rawtrial.TETTime>=respstart) & (rawtrial.TETTime<=respstop),'Phase'] = 'Response' 
-#        rawtrial = rawtrial[rawtrial.Condition=='Response']
+    conditions = df.Condition.unique()
+    # If there are not 4 trials, raise an error
+    if len(conditions) != 4:
+        raise Exception('Expected 4 trials, subject has {} trials'.format(len(conditions)))
+    # If there are 4 trials, check that they are ['C','L','Vegetables','GirlsNames']
+    elif set(conditions) != set(['C','L','Vegetables','GirlsNames']):
+        raise Exception('Expected trials to be ["C","L","Vegetables","GirlsNames"], subject has {}'.format(conditions))
+    # Clean each trial
+    for condition in conditions:
+        rawtrial = df.loc[df.Condition==condition]
+        # Fill missing CurrentObject values. Use forward then backward fill
+        rawtrial['CurrentObject'] = rawtrial['CurrentObject'].fillna(method='ffill').fillna(method='bfill')
+        rawtrial = rawtrial.loc[rawtrial.CurrentObject != "Fixation"]
         cleantrial = pupil_utils.deblink(rawtrial)
-        trial_resamp = pupil_utils.resamp_filt_data(cleantrial, filt_type='low', string_cols=['CurrentObject', 'Phase'])
-        baseline = trial_resamp['DiameterPupilLRFilt'].first('1000ms').mean(numeric_only=True)
-#        baseline = trial_resamp.DiameterPupilLRFilt.iat[0]
+        trial_resamp = pupil_utils.resamp_filt_data(cleantrial, filt_type='low', string_cols=['CurrentObject', 'Condition'])
+        trial_resamp = trial_resamp.reset_index()
+        # Calculate baseline when CurrentObject is 'Baseline'
+        baseline = trial_resamp.loc[trial_resamp.CurrentObject=='Baseline', 'PupilDiameterLRFilt'].mean(numeric_only=True)
         trial_resamp['Baseline'] = baseline
-        trial_resamp['Dilation'] = trial_resamp['DiameterPupilLRFilt'] - trial_resamp['Baseline']
-        trial_resamp = trial_resamp[trial_resamp.Phase=='Response']
-        trial_resamp['Condition'] = condition
-        resampled_dict[trialnum] = trial_resamp        
-    dfresamp = pd.concat(resampled_dict, names=['Trial','Timestamp'], sort=True)
+        trial_resamp['Dilation'] = trial_resamp['PupilDiameterLRFilt'] - trial_resamp['Baseline']
+        # Set Timestamp to 0 when CurrentObject is "RecordLetter"
+        trial_resamp['Timestamp'] = trial_resamp['RTTime'] - trial_resamp.loc[trial_resamp.CurrentObject=='RecordLetter', 'RTTime'].iloc[0]
+        trial_resamp['Timestamp'] = pd.to_datetime(trial_resamp.Timestamp.values.astype(np.int64), unit='ms')        
+        resampled_dict[condition] = trial_resamp
+    dfresamp = pd.concat(resampled_dict, names=['Condition','Timestamp'])
     return dfresamp
     
-
-def get_trial_events(df):
-    """
-    Create dataframe of trial events. This includes:
-        Condition: ['Letter', 'Category']
-        Trial: [1, 2, 3, 4, 5, 6]
-        TrialPhase = ['Baseline', 'Response']
-        StartStop = ['Start', 'Stop']
-    First finds timestamps where CurrentObject changes to determine starts and stops.
-    Combines these and defines trial, phase and whether it is start or stop time. 
-    Checks for either 4 or 6 trials, otherwise raises an error. Assumes first 
-    half of trials are Lett fluency and second half are Category fluency.
-    """
-    startidx = df['CurrentObject'].ne(df['CurrentObject'].shift().ffill()).astype(bool)
-    stopidx = df['CurrentObject'].ne(df['CurrentObject'].shift(-1).bfill()).astype(bool)
-    trialevents_start = pd.DataFrame(df.loc[startidx, ['TETTime','CurrentObject']])
-    trialevents_stop = pd.DataFrame(df.loc[stopidx, ['TETTime','CurrentObject']])
-    trialevents_start = trialevents_start.loc[(trialevents_start.CurrentObject=="ReadLetter") | 
-                                              (trialevents_start.CurrentObject == "RecordLetter")]
-    trialevents_stop = trialevents_stop.loc[(trialevents_stop.CurrentObject=="BeginFile") | 
-                                            (trialevents_stop.CurrentObject == "RecordLetter")]
-    ntrials = np.sum(trialevents_start['CurrentObject']=='ReadLetter')
-    if (ntrials==4) | (ntrials==6):
-        trialevents_start['TrialPhase'] = np.tile(['Baseline','Response'], ntrials)
-        trialevents_start['StatStop'] = 'Start'
-        trialevents_stop['TrialPhase'] = np.tile(['Baseline','Response'], ntrials)
-        trialevents_stop['StartStop'] = 'Stop'
-        trialevents = trialevents_start.append(trialevents_stop).sort_index()
-        trialevents['Trial'] = np.repeat(range(1,ntrials+1), 4)
-        trialevents['Condition'] = np.repeat(['Letter', 'Category'], ntrials*2)
-    else:
-        raise Exception('Expected 4 or 6 trials, subject has {} trials'.format(ntrials))
-    return trialevents
 
    
 def proc_subject(filelist, outdir):
@@ -114,29 +95,32 @@ def proc_subject(filelist, outdir):
         4. Percent of samples with blinks """
     for fname in filelist:
         print('Processing {}'.format(fname))
-        if (fname.lower().endswith(".gazedata")) | (fname.lower().endswith(".csv") | (fname.lower().endswith(".txt")):
+        if fname.lower().endswith(".gazedata") | fname.lower().endswith(".csv") | fname.lower().endswith(".txt"):
             df = pd.read_csv(fname, sep="\t")
-        elif (fname.lower().endswith(".xlsx")):
+        elif fname.lower().endswith(".xlsx"):
             df = pd.read_excel(fname)
         else: 
             raise IOError('Could not open {}'.format(fname))  
         subid = pupil_utils.get_vetsaid(df, fname)
-        timepoint = pupil_utils.get_timepoint(df['Session'], fname)
-        trialevents = get_trial_events(df)
-        dfresamp = clean_trials(df, trialevents)
-        dfresamp = dfresamp.reset_index(drop=False).set_index(['Condition','Trial'])
-        dfresamp['Timestamp'] = dfresamp.groupby(level='Trial')['Timestamp'].transform(lambda x: x - x.iat[0])
-        dfresamp['Timestamp'] = pd.to_datetime(dfresamp.Timestamp.values.astype(np.int64))
+        # Convert PupilDiameterLeftEye and PupilDiameterRightEye to numeric
+        df['PupilDiameterLeftEye'] = pd.to_numeric(df['PupilDiameterLeftEye'], errors='coerce')
+        df['PupilDiameterRightEye'] = pd.to_numeric(df['PupilDiameterRightEye'], errors='coerce')      
+        # Assign conditions to task. Letter: ['C', 'L']; Category: ['Vegetables', 'GirlsNames']
+        dfresamp = clean_trials(df)
         ### Create data resampled to 1 second
-        dfresamp1s = dfresamp.groupby(level=['Condition','Trial']).apply(lambda x: x.resample('1s', on='Timestamp', closed='right', label='right').mean(numeric_only=True))
-        pupilcols = ['Subject', 'Session', 'Trial', 'Condition', 'Timestamp', 
-                     'Dilation', 'Baseline', 'DiameterPupilLRFilt', 'BlinksLR']
-        pupildf = dfresamp1s.reset_index()[pupilcols].sort_values(by=['Trial','Timestamp'])
-        pupildf = pupildf[pupilcols].rename(columns={'DiameterPupilLRFilt':'Diameter',
+        dfresamp1s = dfresamp.groupby(level='Condition').apply(lambda x: x.resample('1s', on='Timestamp', closed='right', label='right').mean(numeric_only=True))
+        pupilcols = ['Subject', 'Condition', 'Timestamp', 'Dilation', 'Baseline',
+                     'PupilDiameterLRFilt', 'BlinksLR']
+        pupildf = dfresamp1s.reset_index()[pupilcols].sort_values(by=['Condition','Timestamp'])
+        pupildf = pupildf[pupilcols].rename(columns={'PupilDiameterLRFilt':'Diameter',
                                          'BlinksLR':'BlinkPct'})
         # Set subject ID and session as (as type string)
         pupildf['Subject'] = subid
-        pupildf['Timestamp'] = pd.to_datetime(pupildf.Timestamp).dt.strftime('%H:%M:%S')
+        # Add column with seconds and format Timestamp
+        pupildf['Timestamp'] = pupil_utils.convert_timestamp(pupildf.Timestamp)
+        pupildf['Seconds'] = pupildf['Timestamp'].apply(pupil_utils.format_timedelta_seconds)
+        pupildf['Timestamp'] = pupildf['Timestamp'].apply(pupil_utils.format_timedelta_hms)
+        pupildf['Task'] = pupildf['Condition'].apply(lambda x: 'Letter' if x in ['C', 'L'] else ('Category' if x in ['Vegetables', 'GirlsNames'] else np.nan)) 
         # Generate output filename
         pupil_outname = os.path.join(outdir, 'Fluency_' + subid + '_ProcessedPupil.csv')
         print('Writing processed data to {0}'.format(pupil_outname))
@@ -144,16 +128,19 @@ def proc_subject(filelist, outdir):
         plot_trials(pupildf, pupil_outname)
         
         #### Create data for 15 second blocks
-        dfresamp15s = dfresamp.groupby(level=['Condition','Trial']).apply(lambda x: x.resample('15s', on='Timestamp', closed='right', label='right').mean(numeric_only=True))
-        pupilcols = ['Subject', 'Session', 'Trial', 'Condition', 'Timestamp', 
-                     'Dilation', 'Baseline', 'DiameterPupilLRFilt', 'BlinksLR']
-        pupildf15s = dfresamp15s.reset_index()[pupilcols].sort_values(by=['Trial','Timestamp'])
-        pupildf15s = pupildf15s[pupilcols].rename(columns={'DiameterPupilLRFilt':'Diameter',
+        dfresamp15s = dfresamp.groupby(level=['Condition']).apply(lambda x: x.resample('15s', on='Timestamp', closed='right', label='right').mean(numeric_only=True))
+        pupilcols = ['Subject', 'Condition', 'Timestamp', 'Dilation', 'Baseline',
+                     'PupilDiameterLRFilt', 'BlinksLR']        
+        pupildf15s = dfresamp15s.reset_index()[pupilcols]
+        pupildf15s = pupildf15s[pupilcols].rename(columns={'PupilDiameterLRFilt':'Diameter',
                                          'BlinksLR':'BlinkPct'})
         # Set subject ID as (as type string)
         pupildf15s['Subject'] = subid
-        pupildf15s['Timestamp'] = pd.to_datetime(pupildf15s.Timestamp).dt.strftime('%H:%M:%S')
-        pupil15s_outname = pupil_outname('_ProcessedPupil.csv', '_ProcessedPupil_Quartiles.csv')
+        pupildf15s['Timestamp'] = pupil_utils.convert_timestamp(pupildf15s.Timestamp)
+        pupildf15s['Seconds'] = pupildf15s['Timestamp'].apply(pupil_utils.format_timedelta_seconds)
+        pupildf15s['Timestamp'] = pupildf15s['Timestamp'].apply(pupil_utils.format_timedelta_hms)
+        pupildf15s['Task'] = pupildf15s['Condition'].apply(lambda x: 'Letter' if x in ['C', 'L'] else ('Category' if x in ['Vegetables', 'GirlsNames'] else np.nan)) 
+        pupil15s_outname = os.path.join(outdir, 'Fluency_' + subid + '_ProcessedPupil_Quartiles.csv')
         'Writing quartile data to {0}'.format(pupil15s_outname)
         pupildf15s.to_csv(pupil15s_outname, index=False)
 
