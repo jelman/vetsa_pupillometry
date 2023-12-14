@@ -31,7 +31,7 @@ conda activate vetsa-pupillometry
 ```
 python <task name>_proc_subject.py
 ```
-2. Run the script `<task name>_proc_group.py` to process group data. This script will open a folder selection window to select the directory containing all processed subject data. It will then save group data into the specified output directory.
+2. Run the script to process group data. This script will open a folder selection window to select the directory containing all processed subject data. It will then save group data into the specified output directory.
 ```
 python <task name>_proc_group.py
 ```
