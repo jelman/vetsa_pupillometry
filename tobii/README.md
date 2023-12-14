@@ -1,4 +1,4 @@
-# VETSA Pupillometry Processing Pipeline
+# VETSA Pupillometry Processing Pipeline (Tobii)
 This repository contains the code for the VETSA pupillometry processing pipeline. The pipeline uses packages listed in the environment.yml file. Data were acquired using Tobii eye trackers and E-prime software starting in wave 4 of VETSA. Pupil were collected during the following tasks:
 - Digit span
 - Verbal fluency
@@ -14,6 +14,9 @@ There are several changes to Digit Span and Fluency task acquisition and process
 ## Prerequisites
 1. Install [Anaconda](https://www.anaconda.com/products/individual)
 2. Clone this repository
+```
+git clone https://github.com/jelman/vetsa_pupillometry.git
+```
 3. Create a conda environment using the environment.yml file
 ```
 conda env create -f environment.yml
