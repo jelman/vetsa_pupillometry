@@ -9,6 +9,7 @@ The code in this repo is based on code written for the [PupAlz](https://github.c
 There are several changes to Digit Span and Fluency task acquisition and processing:
 - The Digit Span task includes 2 baseline tasks in which 9 digits are read aloud. Participants are instructucted only to listen to the digits but not try to remember them (with a note that they will be asked to remember digits on other trials). Pupil diameter during active memory trials can be compared to dilation during the baseline trials at the corresponding digit to isolate auditory processing from memory encoding.
 - The Fluency task includes a 2 second baseline period at the beginning of each trial prior to instructions and letter/category presentation. This provides a baseline free from the auditory stimuli or initial stages of word retrieval processes. 
+- The fluency task was 30 seconds in duration rather than 60 seconds. Group level data are summarized in tertiles (10s) rather than quartiles (15s).
 
 
 ## Prerequisites

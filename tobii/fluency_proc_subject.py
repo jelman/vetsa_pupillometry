@@ -124,6 +124,8 @@ def proc_subject(filelist, outdir):
         pupildf['Seconds'] = pupildf['Timestamp'].apply(pupil_utils.format_timedelta_seconds)
         pupildf['Timestamp'] = pupildf['Timestamp'].apply(pupil_utils.format_timedelta_hms)
         pupildf['Task'] = pupildf['Condition'].apply(lambda x: 'Letter' if x in ['C', 'L'] else ('Category' if x in ['Vegetables', 'GirlsNames'] else np.nan)) 
+        # Only keep samples up to 30.0 seconds
+        pupildf = pupildf[pupildf.Seconds <= 30.0]
         # Generate output filename
         pupil_outname = os.path.join(outdir, 'Fluency_' + subid + '_ProcessedPupil.csv')
         print('Writing processed data to {0}'.format(pupil_outname))
@@ -131,21 +133,23 @@ def proc_subject(filelist, outdir):
         plot_trials(pupildf, pupil_outname)
         
         #### Create data for 15 second blocks
-        dfresamp15s = dfresamp.groupby(level=['Condition']).apply(lambda x: x.resample('15s', on='Timestamp', closed='right', label='right').mean(numeric_only=True))
+        dfresamp10s = dfresamp.groupby(level=['Condition']).apply(lambda x: x.resample('10s', on='Timestamp', closed='right', label='right').mean(numeric_only=True))
         pupilcols = ['Subject', 'Condition', 'Timestamp', 'Dilation', 'Baseline',
                      'PupilDiameterLRFilt', 'BlinksLR']        
-        pupildf15s = dfresamp15s.reset_index()[pupilcols]
-        pupildf15s = pupildf15s[pupilcols].rename(columns={'PupilDiameterLRFilt':'Diameter',
+        pupildf10s = dfresamp10s.reset_index()[pupilcols]
+        pupildf10s = pupildf10s[pupilcols].rename(columns={'PupilDiameterLRFilt':'Diameter',
                                          'BlinksLR':'BlinkPct'})
         # Set subject ID as (as type string)
-        pupildf15s['Subject'] = subid
-        pupildf15s['Timestamp'] = pupil_utils.convert_timestamp(pupildf15s.Timestamp)
-        pupildf15s['Seconds'] = pupildf15s['Timestamp'].apply(pupil_utils.format_timedelta_seconds)
-        pupildf15s['Timestamp'] = pupildf15s['Timestamp'].apply(pupil_utils.format_timedelta_hms)
-        pupildf15s['Task'] = pupildf15s['Condition'].apply(lambda x: 'Letter' if x in ['C', 'L'] else ('Category' if x in ['Vegetables', 'GirlsNames'] else np.nan)) 
-        pupil15s_outname = os.path.join(outdir, 'Fluency_' + subid + '_ProcessedPupil_Quartiles.csv')
-        'Writing quartile data to {0}'.format(pupil15s_outname)
-        pupildf15s.to_csv(pupil15s_outname, index=False)
+        pupildf10s['Subject'] = subid
+        pupildf10s['Timestamp'] = pupil_utils.convert_timestamp(pupildf10s.Timestamp)
+        pupildf10s['Seconds'] = pupildf10s['Timestamp'].apply(pupil_utils.format_timedelta_seconds)
+        pupildf10s['Timestamp'] = pupildf10s['Timestamp'].apply(pupil_utils.format_timedelta_hms)
+        pupildf10s['Task'] = pupildf10s['Condition'].apply(lambda x: 'Letter' if x in ['C', 'L'] else ('Category' if x in ['Vegetables', 'GirlsNames'] else np.nan)) 
+        # Remove samples after 30.0 seconds
+        pupildf10s = pupildf10s[pupildf10s.Seconds <= 30.0]
+        pupil10s_outname = os.path.join(outdir, 'Fluency_' + subid + '_ProcessedPupil_Tertiles.csv')
+        'Writing quartile data to {0}'.format(pupil10s_outname)
+        pupildf10s.to_csv(pupil10s_outname, index=False)
 
 
 
@@ -157,7 +161,7 @@ if __name__ == '__main__':
         print("""Processes single subject data from fluency task and outputs csv
               files for use in further group analysis. Takes eye tracker data 
               text file (*.gazedata) as input. Removes artifacts, filters, and 
-              calculates dilation per 1s.Also creates averages over 15s blocks.""")
+              calculates dilation per 1s.Also creates averages over 10s blocks.""")
         print('')
         root = tkinter.Tk()
         root.withdraw()
