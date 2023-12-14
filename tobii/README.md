@@ -6,6 +6,10 @@ This repository contains the code for the VETSA pupillometry processing pipeline
 
 The code in this repo is based on code written for the [PupAlz](https://github.com/jelman/PupAlz) project. Core processing steps are largely the same, but scripts have been altered to accommodate different data organization and naming conventions. Processing scripts for the VSTMB task are new. 
 
+There are several changes to Digit Span and Fluency task acquisition and processing:
+- The Digit Span task includes 2 baseline tasks in which 9 digits are read aloud. Participants are instructucted only to listen to the digits but not try to remember them (with a note that they will be asked to remember digits on other trials). Pupil diameter during active memory trials can be compared to dilation during the baseline trials at the corresponding digit to isolate auditory processing from memory encoding.
+- The Fluency task includes a 2 second baseline period at the beginning of each trial prior to instructions and letter/category presentation. This provides a baseline free from the auditory stimuli or initial stages of word retrieval processes. 
+
 
 ## Prerequisites
 1. Install [Anaconda](https://www.anaconda.com/products/individual)
