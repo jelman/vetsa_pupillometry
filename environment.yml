@@ -1,4 +1,4 @@
-name: vetsa4pupil
+name: vetsa-pupillometry
 channels:
   - conda-forge
   - defaults
