@@ -5,7 +5,7 @@ Created on Mon Aug 12 14:57:31 2019
 
 @author: jelman
 
-Script to gather fluency data summarized by quartiles. Outputs a  a summary 
+Script to gather fluency data summarized by Tertiles. Outputs a  a summary 
 dataset which averages across trials to give a single value per condition and 
 quartile.
 """
@@ -26,21 +26,23 @@ except ImportError:
     from tkinter import filedialog
 
 def pivot_wide(dflong):
-    dflong = dflong.replace({'Timestamp' : 
-                                      {'00:00:15' : '1_15', '00:00:30' : '15_30', 
-                                       '00:00:45' : '30_45', '00:01:00' : '45_60'},
-                              'Condition' : 
-                                      {'Category' : 'cat', 'Letter' : 'let'}})
-
-    dflong = dflong[dflong.Timestamp!='00:00:00']
-    dflong['ConditionTime'] = dflong.Condition + '_' + dflong.Timestamp
-    dflong = dflong.drop(columns=['Condition','Timestamp'])
-    colnames = ['Session', 'Dilation', 'Baseline','Diameter', 'BlinkPct', 'ntrials']
-    dfwide = dflong.pivot(index="Subject", columns='ConditionTime', values=colnames)
+    # Convert float to integer
+    dflong['Seconds'] = dflong['Seconds'].astype(int)
+    # Define a mapping dictionary for integer seconds to string
+    seconds_mapping = {10: '1_10', 20: '10_20', 30: '20_30'}
+    # Replace integer seconds with string using the map function
+    dflong['Seconds'] = dflong['Seconds'].map(seconds_mapping)
+    # Replace 'Task' column values
+    dflong['Task'] = dflong['Task'].replace({'Category' : 'cat', 'Letter' : 'let'})
+    # Combine Task and Seconds columns into a single column with '_' delimiter
+    dflong['TaskTime'] = dflong.Task + '_' + dflong.Seconds
+    dflong = dflong.drop(columns=['Task','Seconds'])
+    colnames = ['Dilation', 'Baseline','Diameter', 'BlinkPct', 'ntrials']
+    dfwide = dflong.pivot(index="Subject", columns='TaskTime', values=colnames)
     dfwide.columns = ['_'.join([str(col[0]),'fluency',str(col[1])]).strip() for col in dfwide.columns.values]
     condition = ['cat', 'let']
-    quart = ['1_15','15_30','30_45','45_60']
-    neworder = [n+'_fluency_'+c+'_'+q for c in condition for q in quart for n in colnames]
+    tertiles = ['1_10','10_20','20_30']
+    neworder = [n+'_fluency_'+c+'_'+t for c in condition for t in tertiles for n in colnames]
     dfwide = dfwide.reindex(neworder, axis=1)
     dfwide = dfwide.reset_index()
     dfwide.columns = dfwide.columns.str.lower()
@@ -51,7 +53,7 @@ def pivot_wide(dflong):
     
 def proc_group(datadir):
     # Gather processed fluency data
-    globstr = '*_ProcessedPupil_Quartiles.csv'
+    globstr = '*_ProcessedPupil_Tertiles.csv'
     filelist = glob(os.path.join(datadir, globstr))
     # Initiate empty list to hold subject data
     allsubs = []
@@ -69,24 +71,28 @@ def proc_group(datadir):
     alldf = pd.concat(allsubs)
     # Save out concatenated data
     date = datetime.today().strftime('%Y-%m-%d')
-    # outname_all = ''.join(['fluency_Quartiles_AllTrials_',date,'.csv'])
+    # outname_all = ''.join(['fluency_Tertiles_AllTrials_',date,'.csv'])
     # alldf.to_csv(os.path.join(datadir, outname_all), index=False)
     
-    # Filter out quartiles with >50% blinks or entire trials with >50% blinks
+    # Filter out Tertiles with >50% blinks or entire trials with >50% blinks
     exclude = (alldf.groupby('Subject').BlinkPct.transform(lambda x: x.mean())>.50) | (alldf.BlinkPct>.50)
     alldf = alldf[-exclude]
     # Average across trials within quartile and condition
-    alldfgrp = alldf.groupby(['Subject','Condition','Timestamp']).mean().reset_index()
-    ntrials = alldf.groupby(['Subject','Condition','Timestamp']).size().reset_index(name='ntrials')
-    alldfgrp = alldfgrp.merge(ntrials, on=['Subject','Condition','Timestamp'], validate="one_to_one")
-    alldfgrp = alldfgrp.drop(columns='Trial')
+    pupilcols = ['Subject','Seconds','Dilation','Baseline','Diameter','BlinkPct','Task']
+    alldfgrp = alldf[pupilcols].groupby(['Subject','Task','Seconds']).mean().reset_index()
+    # Drop Seconds==0.0, this was only just for plotting purposes
+    alldfgrp = alldfgrp[alldfgrp.Seconds!=0.0]
+    # Get number of trials contributing to each task
+    ntrials = alldf.groupby(['Subject','Task','Seconds']).size().reset_index(name='ntrials')
+    alldfgrp = alldfgrp.merge(ntrials, on=['Subject','Task','Seconds'], validate="one_to_one")
     # Save out summarized data
-    outname_avg = ''.join(['fluency_Quartiles_group_',date,'.csv'])
+    outname_avg = ''.join(['fluency_Tertiles_group_long_',date,'.csv'])
+    print('Writing processed group data (long format) to {0}'.format(outname_avg))
     alldfgrp.to_csv(os.path.join(datadir, outname_avg), index=False)
     
     alldfgrp_wide = pivot_wide(alldfgrp)
-    outname_wide = ''.join(['fluency_Quartiles_REDCap_',date,'.csv'])
-    print('Writing processed group data to {0}'.format(outname_wide))
+    outname_wide = ''.join(['fluency_Tertiles_group_wide_',date,'.csv'])
+    print('Writing processed group data (wide format) to {0}'.format(outname_wide))
     alldfgrp_wide.to_csv(os.path.join(datadir, outname_wide), index=False)
 
 if __name__ == '__main__':
@@ -94,8 +100,8 @@ if __name__ == '__main__':
         print('USAGE: {} <data directory> '.format(os.path.basename(sys.argv[0])))
         print('Searches for datafiles created by fluency_proc_subject.py for use as input.')
         print('This includes:')
-        print('  Fluency_<subject>_ProcessedPupil_Quartiles.csv')
-        print('Extracts mean dilation from quartiles and aggregates over trials.')
+        print('  Fluency_<subject>_ProcessedPupil_Tertiles.csv')
+        print('Extracts mean dilation from Tertiles and aggregates over trials.')
         print('')
 
         root = tkinter.Tk()
