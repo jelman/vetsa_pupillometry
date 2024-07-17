@@ -21,7 +21,7 @@ def get_vetsaid(df, fname):
     """
     fname_base = os.path.basename(fname)  
     try:
-        vetsaid = re.search(r'(\d{5}-[12])', fname_base, re.IGNORECASE).group(1)
+        vetsaid = re.search(r'(-\d{5}-[12])', fname_base, re.IGNORECASE).group(1)
         if vetsaid[-1] == '1':
             vetsaid = vetsaid[:-2] + 'A'
         elif vetsaid[-1] == '2':
