@@ -59,6 +59,9 @@ def clean_trials(trialevents):
         trial_resamp['Baseline'] = baseline
         trial_resamp['Dilation'] = trial_resamp['PupilDiameterLRFilt'] - trial_resamp['Baseline']
         trial_resamp = trial_resamp[trial_resamp.Condition=='Record']
+        # If trial is empty after filtering, skip
+        if trial_resamp.empty:
+            continue  
         trial_resamp.index = pd.DatetimeIndex((trial_resamp.index - trial_resamp.index[0]).astype(np.int64))
         resampled_dict[trial] = trial_resamp        
     dfresamp = pd.concat(resampled_dict, names=['Trial','Timestamp'])
@@ -161,7 +164,11 @@ def proc_subject(filelist, outdir):
         print('Writing processed data to {0}'.format(pupil_outname))
         # Save out data and plots
         pupildf.to_csv(pupil_outname, index=False)
-        plot_trials(pupildf, pupil_outname)
+        try:
+            plot_trials(pupildf, pupil_outname)
+        except KeyError as e:
+            print(f"Skipping plotting due to KeyError: {e}")
+            print(f"Check {pupil_outname} for missing data (e.g., all NaNs)")
 
 
     
