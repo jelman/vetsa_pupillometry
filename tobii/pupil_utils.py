@@ -21,7 +21,7 @@ def get_vetsaid(df, fname):
     """
     fname_base = os.path.basename(fname)  
     try:
-        vetsaid = re.search(r'(-\d{5}-[12])', fname_base, re.IGNORECASE).group(1)
+        vetsaid = re.search(r'(\d{5}-[12])', fname_base, re.IGNORECASE).group(1)
         if vetsaid[-1] == '1':
             vetsaid = vetsaid[:-2] + 'A'
         elif vetsaid[-1] == '2':
@@ -30,7 +30,13 @@ def get_vetsaid(df, fname):
             raise Exception("VETSAID in filename does not end in 1 or 2.")
     except AttributeError:
         raise Exception("Could not find valid VETSAID in path of input file.")
+    
     df['VETSAID'] = df['Subject'].astype(str) + df['Session'].map({1: 'A', 2: 'B'})
+    
+    # Debug prints
+    print(f"Extracted VETSAID from filename: {vetsaid}")
+    print(f"Extracted VETSAID from file content: {df['VETSAID'].unique()[0]}")
+    
     if vetsaid == df['VETSAID'].unique()[0]:
         return vetsaid
     else:
