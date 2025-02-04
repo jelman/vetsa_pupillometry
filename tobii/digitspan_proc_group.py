@@ -42,16 +42,9 @@ def get_sess_data(datadir):
         subdf = pd.read_csv(sub_file)
         sess_list.append(subdf)
     sessdf = pd.concat(sess_list).reset_index(drop=True)
-    sessdf = sessdf.sort_values(by=['Subject', 'Load', 'Timestamp'])
-    # Max dilation and second when it occurred
-    maxdf = sessdf.reindex(sessdf.groupby(['Subject', 'Load'])['Dilation'].idxmax())
-    maxdf = maxdf[['Subject', 'Session', 'Load', 'Timestamp', 'Dilation']]
-    maxdf = maxdf.rename(columns={'Timestamp':'MaxTime', 'Dilation':'MaxDilation'})
-    sessdf = sessdf.groupby(['Subject','Load']).last().reset_index()
-    # Merge in max dilation and max time
-    sessdf = sessdf.merge(maxdf, on=['Subject','Session','Load'])
+    sessdf = sessdf.sort_values(by=['Subject', 'Load', 'Seconds'])
     # Filter for loads that have data at the last second
-    idx = sessdf.Timestamp.str.slice(-2).values.astype(np.int64) == sessdf.Load.values+1
+    idx = sessdf.Timestamp.str.slice(-2).values.astype(np.int64) == sessdf.Load.values.astype('int')+1
     return sessdf.loc[idx,:] 
 
 
@@ -59,8 +52,8 @@ def get_sess_data(datadir):
 
 
 def unstack_conditions(dflong):
-    colnames = ['Session', 'Baseline', 'Diameter', 'Dilation', 'BlinkPct', 
-                'ntrials', 'MaxTime', 'MaxDilation'] 
+    colnames = ['Baseline', 'Diameter', 'Dilation', 'BlinkPct', 
+                'ntrials'] 
     df = dflong.pivot(index="Subject", columns='Load', 
                       values=colnames)
     df.columns = ['_'.join([str(col[0]),'digitspan',str(col[1])]).strip() for col in df.columns.values]
